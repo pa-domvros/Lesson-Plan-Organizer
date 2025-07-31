@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-lang-key="appTitle">Lesson Plan Organizer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Georgia&display=swap" rel="stylesheet">
+    <style>
+        /* Using TailwindCSS for most styling, with some custom additions */
+        body {
+            font-family: 'Georgia', serif;
+            color: #3e2723; /* Dark Brown */
+        }
+        
+        .screen-bg {
+             background-color: #f5f5dc; /* Cream/Beige */
+        }
+
+        /* Custom Colors for Tailwind */
+        .bg-primary { background-color: #5d4037; } /* Earthy Brown */
+        .text-primary-content { color: #f5f5dc; }
+        .bg-accent { background-color: #8db596; } /* Sage Green */
+        .text-accent-content { color: #3e2723; }
+        .border-primary { border-color: #5d4037; }
+        .border-accent { border-color: #8db596; }
+
+        /* Styling for the building blocks */
+        .plan-block {
+            border: 1px solid #dcd2b7;
+            transition: box-shadow 0.3s ease;
+        }
+
+        .plan-block:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        
+        .plan-block.dragging {
+            opacity: 0.5;
+            border: 2px dashed #5d4037;
+        }
+
+        .activity-step {
+             page-break-inside: avoid;
+        }
+        
+        /* Stylish Frame for Intro Page */
+        .intro-frame {
+            background-color: #fdfcf7;
+            border: 1px solid #dcd2b7;
+            padding: 2rem;
+            box-shadow: 0 0 0 8px #fdfcf7, 0 0 0 10px #dcd2b7;
+            max-width: 800px;
+        }
+
+        /* Print-specific styles */
+        @media print {
+            body {
+                counter-reset: page;
+                background-color: white !important; /* Ensure no background on print */
+            }
+            body * {
+                visibility: hidden;
+            }
+            #print-area, #print-area * {
+                visibility: visible;
+            }
+            #print-area {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .plan-block {
+                page-break-inside: avoid;
+                box-shadow: none !important;
+                border: none !important; /* Remove frame */
+                padding-bottom: 1rem;
+                border-bottom: 1px solid #eee !important; /* Add subtle separator */
+            }
+            .hide-on-print {
+                display: none !important;
+            }
+            .footer-credit-print {
+                position: fixed;
+                bottom: 0;
+                width: 100%;
+                text-align: center;
+                visibility: visible;
+                background: none; /* Ensure no background on print */
+                color: #3e2723 !important; /* Ensure text color is correct */
+            }
+            h3, h4 {
+                page-break-after: avoid;
+            }
+            .print-value {
+                white-space: pre-wrap; /* Respects line breaks from textareas */
+                word-wrap: break-word;
+            }
+        }
+        
+        /* CSS for adding page numbers to the printed PDF */
+        @page {
+            size: A4;
+            margin: 1in;
+            
+            @bottom-center {
+                content: "Page " counter(page);
+                font-family: 'Georgia', serif;
+                font-size: 10pt;
+                color: #3e2723;
+            }
+        }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen screen-bg">
+
+    <!-- Introduction Page -->
+    <div id="introduction-page" class="flex-grow flex flex-col items-center justify-center p-4">
+        <div class="intro-frame text-center rounded">
+            <h1 class="text-3xl font-bold text-primary mb-4" data-lang-key="appTitle">Οργανωτής Σχεδίου Μαθήματος</h1>
+            <div class="text-right mb-6">
+                <select id="intro-language-switcher" class="bg-white border border-accent text-gray-800 p-2 rounded-lg">
+                    <option value="en">English</option>
+                    <option value="el" selected>Ελληνικά</option>
+                </select>
+            </div>
+            <p class="mb-4" data-lang-key="introText1"></p>
+            <p class="mb-4" data-lang-key="introText2"></p>
+            <p class="mb-6" data-lang-key="introText3"></p>
+            
+            <div class="text-left mt-8">
+                <p data-lang-key="introSignature1"></p>
+                <p data-lang-key="introSignature2"></p>
+                <p data-lang-key="introSignature3"></p>
+                <p data-lang-key="introSignature4"></p>
+                <p data-lang-key="introSignature5"></p>
+            </div>
+
+            <button id="enter-app-btn" class="mt-8 bg-primary text-primary-content font-bold py-3 px-8 rounded-lg hover:opacity-90 transition text-lg" data-lang-key="enterApp">Είσοδος</button>
+        </div>
+    </div>
+
+
+    <!-- Main App Container (Initially hidden) -->
+    <div id="app-container" class="hidden flex-grow flex flex-col">
+        <!-- Header -->
+        <header class="bg-primary text-primary-content p-4 shadow-md no-print">
+            <div class="container mx-auto">
+                <div class="flex justify-between items-center">
+                    <h1 class="text-2xl font-bold" data-lang-key="appTitle">Lesson Plan Organizer</h1>
+                    <div class="flex items-center space-x-4">
+                        <button id="new-plan-btn" class="bg-accent text-accent-content font-bold py-2 px-4 rounded-lg hover:opacity-90 transition" data-lang-key="newPlan">New Plan</button>
+                        <button id="print-btn" class="bg-accent text-accent-content font-bold py-2 px-4 rounded-lg hover:opacity-90 transition" data-lang-key="printPDF">Print to PDF</button>
+                        <select id="language-switcher" class="bg-white text-gray-800 p-2 rounded-lg">
+                            <option value="en">English</option>
+                            <option value="el" selected>Ελληνικά</option>
+                        </select>
+                    </div>
+                </div>
+                <p id="credit-line" class="italic text-xs text-center mt-2"></p>
+            </div>
+        </header>
+
+        <div class="flex-grow container mx-auto p-4 flex flex-col md:flex-row gap-8">
+            <!-- Sidebar: Block Library -->
+            <aside class="w-full md:w-1/4 lg:w-1/5 no-print">
+                <div class="bg-white p-4 rounded-lg shadow-lg sticky top-4">
+                    <h2 class="text-xl font-bold mb-4 border-b pb-2 border-primary" data-lang-key="blockLibrary">Block Library</h2>
+                    <div class="space-y-2">
+                        <h3 class="font-bold mt-2" data-lang-key="coreBlocks">Core Blocks</h3>
+                        <button class="block-adder w-full text-left bg-accent text-accent-content p-2 rounded-md hover:opacity-90" data-block-type="basicInfo" data-lang-key="basicInfo">Basic Information</button>
+                        <button class="block-adder w-full text-left bg-accent text-accent-content p-2 rounded-md hover:opacity-90" data-block-type="studentProfile" data-lang-key="studentProfile">Student & Class Profile</button>
+                        <button class="block-adder w-full text-left bg-accent text-accent-content p-2 rounded-md hover:opacity-90" data-block-type="objectives" data-lang-key="objectives">Objectives & Outcomes</button>
+                        <button class="block-adder w-full text-left bg-accent text-accent-content p-2 rounded-md hover:opacity-90" data-block-type="materials" data-lang-key="materials">Materials & Resources</button>
+                        <button class="block-adder w-full text-left bg-accent text-accent-content p-2 rounded-md hover:opacity-90" data-block-type="activities" data-lang-key="activities">Lesson Procedure</button>
+                        <button class="block-adder w-full text-left bg-accent text-accent-content p-2 rounded-md hover:opacity-90" data-block-type="roles" data-lang-key="roles">Roles</button>
+                        <button class="block-adder w-full text-left bg-accent text-accent-content p-2 rounded-md hover:opacity-90" data-block-type="assessment" data-lang-key="assessment">Assessment & Evaluation</button>
+                        <button class="block-adder w-full text-left bg-accent text-accent-content p-2 rounded-md hover:opacity-90" data-block-type="differentiation" data-lang-key="differentiation">Differentiation</button>
+                        <button class="block-adder w-full text-left bg-accent text-accent-content p-2 rounded-md hover:opacity-90" data-block-type="reflection" data-lang-key="reflection">Reflection & Notes</button>
+                        
+                        <h3 class="font-bold mt-4 pt-2 border-t" data-lang-key="specializedBlocks">Specialized Blocks</h3>
+                        <button class="block-adder w-full text-left bg-accent text-accent-content p-2 rounded-md hover:opacity-90" data-block-type="communicationDescriptors" data-lang-key="commDescriptors">Communication Descriptors</button>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Main Content: Canvas -->
+            <main id="canvas" class="w-full md:w-3/4 lg:w-4/5">
+                <div id="print-area" class="bg-white p-6 rounded-lg shadow-lg min-h-[600px] space-y-6">
+                     <!-- Blocks will be added here -->
+                     <div id="canvas-placeholder" class="text-center text-gray-400 py-20">
+                        <h3 class="text-2xl" data-lang-key="canvasTitle">Your Lesson Plan</h3>
+                        <p data-lang-key="canvasInstruction">Select blocks from the library to start building your plan.</p>
+                    </div>
+                </div>
+            </main>
+        </div>
+        
+        <!-- Footer -->
+        <footer class="text-center p-4 mt-8 no-print">
+            <p id="footer-text" class="italic text-sm"></p>
+        </footer>
+    </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- STATE & ELEMENTS ---
+        const canvas = document.getElementById('canvas-placeholder').parentElement;
+        const blockAdders = document.querySelectorAll('.block-adder');
+        const languageSwitcher = document.getElementById('language-switcher');
+        const introLanguageSwitcher = document.getElementById('intro-language-switcher');
+        const creditLine = document.getElementById('credit-line');
+        const footerText = document.getElementById('footer-text');
+        const newPlanBtn = document.getElementById('new-plan-btn');
+        const printBtn = document.getElementById('print-btn');
+        const introPage = document.getElementById('introduction-page');
+        const appContainer = document.getElementById('app-container');
+        const enterAppBtn = document.getElementById('enter-app-btn');
+        let blockCounter = 0;
+        let activityCounter = 0;
+
+        // --- I18N: LANGUAGE DATA ---
+        const translations = {
+            en: {
+                appTitle: "Lesson Plan Organizer",
+                newPlan: "New Plan",
+                printPDF: "Print to PDF",
+                blockLibrary: "Block Library",
+                coreBlocks: "Core Blocks",
+                specializedBlocks: "Specialized Blocks",
+                canvasTitle: "Your Lesson Plan",
+                canvasInstruction: "Select blocks from the library to start building your plan.",
+                footerCredit: "<em>Created by: Panagiotis Domvros - Principal of the 1st Junior High School of Pylaia, All rights reserved 2025-26</em>",
+                lessonPlanFor: "Lesson Plan for",
+                moveUp: "Move Up",
+                moveDown: "Move Down",
+                enterApp: "Enter Application",
+                // Intro Text
+                introText1: "This application was designed to help teachers create lesson plans according to the daily needs of their classes. Its modular design allows you to build your plan with the 'blocks' you need.",
+                introText2: "There is an option to switch languages for foreign language teachers. Also for foreign language teachers, the detailed communication proficiency descriptors are available in Greek and English.",
+                introText3: "By saving the PDF files to your computer, you can gradually create your own reference 'library'.",
+                introSignature1: "With collegial appreciation,",
+                introSignature2: "Panagiotis Domvros",
+                introSignature3: "English Teacher – Theatrologist",
+                introSignature4: "ICT Trainer",
+                introSignature5: "Principal of the 1st Junior High School of Pylaia",
+                // Activity Block Fields
+                activityStep: "Activity",
+                activityTitle: "Activity Title",
+                duration: "Duration",
+                activityType: "Activity Type",
+                classOrganization: "Class Organization",
+                teacherRoleAndActions: "Teacher's Role & Actions",
+                studentActions: "Student Actions",
+                sourcesAndTools: "Sources & Tools",
+                activityOutcomes: "Activity Outcomes",
+                // Block Titles
+                basicInfo: "Basic Information",
+                studentProfile: "Student & Class Profile",
+                objectives: "Objectives & Outcomes",
+                materials: "Materials & Resources",
+                activities: "Lesson Procedure",
+                roles: "Roles",
+                assessment: "Assessment & Evaluation",
+                differentiation: "Differentiation",
+                reflection: "Reflection & Notes",
+                commDescriptors: "Communication Descriptors",
+                // Block Fields
+                lessonTitle: "Lesson Title",
+                teacherName: "Teacher's Name",
+                subject: "Subject",
+                gradeLevel: "Grade Level",
+                date: "Date",
+                unitTopic: "Unit/Topic",
+                studentProfileLabel: "Student Profile",
+                classOrg: "Classroom Organization / Student Work Method",
+                learningObjectives: "Learning Objectives (What will students know/do?)",
+                knowledge: "Knowledge",
+                skills: "Skills",
+                attitudes: "Attitudes/Stances",
+                keyConcepts: "Key Vocabulary/Concepts",
+                physicalMaterials: "Physical Materials",
+                digitalResources: "Digital Content, Tools & Sources",
+                addActivity: "Add Activity Step",
+                teacherRole: "Role of the Teacher",
+                studentRole: "Role of the Student",
+                formativeAssessment: "Formative Assessment (During lesson)",
+                summativeAssessment: "Summative Assessment (After lesson)",
+                alternativeAssessment: "Alternative Assessment Methods",
+                diffStrategies: "Differentiation Strategies",
+                teacherReflection: "Teacher's Reflection (Post-Lesson)",
+                additionalNotes: "Additional Notes (Extensibility, difficulties, etc.)",
+                cefrLevel: "Select CEFR Level",
+                removeBlock: "Remove",
+                // Communication Descriptors
+                readingComp: "Reading Comprehension",
+                writingProd: "Written Production",
+                listeningComp: "Listening Comprehension",
+                oralProd: "Oral Production",
+                interaction: "Interaction",
+                mediation: "Mediation",
+            },
+            el: {
+                appTitle: "Οργανωτής Σχεδίου Μαθήματος",
+                newPlan: "Νέο Σχέδιο",
+                printPDF: "Εκτύπωση σε PDF",
+                blockLibrary: "Βιβλιοθήκη Στοιχείων",
+                coreBlocks: "Βασικά Στοιχεία",
+                specializedBlocks: "Εξειδικευμένα Στοιχεία",
+                canvasTitle: "Το Σχέδιο Μαθήματός σας",
+                canvasInstruction: "Επιλέξτε στοιχεία από τη βιβλιοθήκη για να ξεκινήσετε.",
+                footerCredit: "<em>Δημιουργία: Παναγιώτης Δόμβρος - Διευθυντής 1ου Γυμνασίου Πυλαίας, All rights reserved 2025-26</em>",
+                lessonPlanFor: "Σχέδιο Μαθήματος για",
+                moveUp: "Μετακίνηση Πάνω",
+                moveDown: "Μετακίνηση Κάτω",
+                enterApp: "Είσοδος στην Εφαρμογή",
+                // Intro Text
+                introText1: "Η εφαρμογή αυτή σχεδιάστηκε για να βοηθήσει τις/τους εκπαιδευτικούς να δημιουργήσουν σχέδια μαθήματος ανάλογα με τις καθημερινές ανάγκες του μαθήματος. Η τμηματική της δομή σας επιτρέπει να χτίσετε το σχέδιό σας με τα «δομικά στοιχεία» που χρειάζεστε.",
+                introText2: "Υπάρχει η δυνατότητα εναλλαγής γλώσσας για τους εκπαιδευτικούς των ξένων γλωσσών. Επίσης για τους εκπαιδευτικούς ξένων γλωσσών, υπάρχουν οι αναλυτικοί δείκτες επικοινωνιακής επάρκειας διαθέσιμοι στα ελληνικά και αγγλικά.",
+                introText3: "Κρατώντας τα αρχεία PDF στον υπολογιστή σας μπορείτε σιγά σιγά να δημιουργήσετε τη δική σας «βιβλιοθήκη» αναφοράς.",
+                introSignature1: "Με συναδελφική εκτίμηση,",
+                introSignature2: "Παναγιώτης Δόμβρος",
+                introSignature3: "Εκπαιδευτικός Αγγλικής – Θεατρολόγος",
+                introSignature4: "Επιμορφωτής ΤΠΕ",
+                introSignature5: "Διευθυντής 1ου Γυμνασίου Πυλαίας",
+                // Activity Block Fields
+                activityStep: "Δραστηριότητα",
+                activityTitle: "Δραστηριότητα (τίτλος)",
+                duration: "Διάρκεια",
+                activityType: "Είδος δραστηριότητας",
+                classOrganization: "Οργάνωση τάξης",
+                teacherRoleAndActions: "Ρόλος και ενέργειες εκπαιδευτικού",
+                studentActions: "Ενέργειες μαθητή",
+                sourcesAndTools: "Πηγές - Εργαλεία",
+                activityOutcomes: "Αποτελέσματα της δραστηριότητας",
+                // Block Titles
+                basicInfo: "Βασικές Πληροφορίες",
+                studentProfile: "Προφίλ Μαθητών & Τάξης",
+                objectives: "Στόχοι & Αποτελέσματα",
+                materials: "Υλικά & Πόροι",
+                activities: "Διαδικασία Μαθήματος",
+                roles: "Ρόλοι",
+                assessment: "Αξιολόγηση",
+                differentiation: "Διαφοροποίηση",
+                reflection: "Αναστοχασμός & Σημειώσεις",
+                commDescriptors: "Δείκτες Επικοινωνιακής Επάρκειας",
+                // Block Fields
+                lessonTitle: "Τίτλος Μαθήματος",
+                teacherName: "Όνομα Εκπαιδευτικού",
+                subject: "Θεματική ενότητα",
+                gradeLevel: "Τάξη",
+                date: "Ημερομηνία",
+                unitTopic: "Ενότητα/Θέμα",
+                studentProfileLabel: "Προφίλ μαθητών",
+                classOrg: "Τρόπος εργασίας μαθητών-Οργάνωση τάξης",
+                learningObjectives: "Μαθησιακοί Στόχοι (Τι θα γνωρίζουν/κάνουν οι μαθητές;)",
+                knowledge: "Γνώσεις",
+                skills: "Δεξιότητες",
+                attitudes: "Στάσεις",
+                keyConcepts: "Βασικό Λεξιλόγιο/Έννοιες",
+                physicalMaterials: "Φυσικά Υλικά",
+                digitalResources: "Ψηφιακό περιεχόμενο, εργαλεία, πηγές",
+                addActivity: "Προσθήκη Δραστηριότητας",
+                teacherRole: "Ρόλος του Εκπαιδευτικού",
+                studentRole: "Ρόλος του Μαθητή",
+                formativeAssessment: "Διαμορφωτική Αξιολόγηση (Κατά τη διάρκεια)",
+                summativeAssessment: "Αθροιστική Αξιολόγηση (Μετά το μάθημα)",
+                alternativeAssessment: "Εναλλακτικές Μορφές Αξιολόγησης",
+                diffStrategies: "Στρατηγικές Διαφοροποίησης",
+                teacherReflection: "Αναστοχασμός Εκπαιδευτικού (Μετά το μάθημα)",
+                additionalNotes: "Πρόσθετες Σημειώσεις (Επεκτασιμότητα, δυσκολίες, κ.λπ.)",
+                cefrLevel: "Επιλογή Επιπέδου ΚΕΠΑ",
+                removeBlock: "Αφαίρεση",
+                // Communication Descriptors
+                readingComp: "Κατανόηση Γραπτού Λόγου",
+                writingProd: "Παραγωγή Γραπτού Λόγου",
+                listeningComp: "Κατανόηση Προφορικού Λόγου",
+                oralProd: "Παραγωγή Προφορικού Λόγου",
+                interaction: "Διάδραση",
+                mediation: "Διαμεσολάβηση",
+            }
+        };
+        
+        const commsDescriptorsData = {
+            a1: { readingComp: ["Understand short, simple texts.", "Find specific information in lists."], writingProd: ["Write simple phrases about themselves.", "Fill in forms with personal details."], listeningComp: ["Understand basic personal information.", "Recognize familiar names and numbers."], oralProd: ["Ask and answer simple personal questions.", "Use simple greeting expressions."], interaction: ["Interact in a simple way.", "Ask for personal details."], mediation: ["Relay simple information from a Greek text.", "Use info from a Greek map in a simple message."] },
+            a2: { readingComp: ["Understand short, simple personal letters.", "Find predictable information in ads."], writingProd: ["Write short, simple notes and messages.", "Describe family and living conditions."], listeningComp: ["Understand phrases on topics of immediate relevance.", "Catch the main point in short announcements."], oralProd: ["Communicate in simple, routine tasks.", "Describe their background and environment."], interaction: ["Handle short social exchanges.", "Exchange info on familiar topics."], mediation: ["Explain the main point of a simple Greek text.", "Give definitions of Greek words."] },
+            b1: { readingComp: ["Understand texts on familiar matters.", "Understand descriptions of events, feelings."], writingProd: ["Write simple connected text on familiar topics.", "Write personal letters describing experiences."], listeningComp: ["Understand the main points of clear standard speech.", "Understand main point of many TV/radio programs."], oralProd: ["Deal with most situations likely to arise whilst travelling.", "Describe experiences and events, dreams, hopes."], interaction: ["Enter unprepared into conversation on familiar topics.", "Give reasons and explanations for opinions."], mediation: ["Convey the main idea of a Greek text.", "Summarize information from various Greek sources."] },
+            b2: { readingComp: ["Understand articles on current problems.", "Read contemporary literary prose."], writingProd: ["Write clear, detailed text on a wide range of subjects.", "Write an essay or report."], listeningComp: ["Understand extended speech and lectures.", "Understand most TV news and current affairs programs."], oralProd: ["Interact with a degree of fluency and spontaneity.", "Take an active part in discussion in familiar contexts."], interaction: ["Present and defend opinions in discussion.", "Explain a viewpoint on a topical issue."], mediation: ["Summarize information from different sources.", "Paraphrase complex Greek texts."] },
+            c1: { readingComp: ["Understand long and complex factual and literary texts.", "Appreciate distinctions of style."], writingProd: ["Express him/herself in clear, well-structured text.", "Present complex subjects in a letter, essay or report."], listeningComp: ["Understand extended speech even when it is not clearly structured.", "Understand television programmes and films without too much effort."], oralProd: ["Express him/herself fluently and spontaneously.", "Use language flexibly for social and professional purposes."], interaction: ["Formulate ideas and opinions with precision.", "Relate his/her contribution skillfully to those of other speakers."], mediation: ["Summarize information from multiple complex sources.", "Mediate between Greek and the target language effectively."] }
+        };
+
+
+        // --- FUNCTIONS ---
+
+        const setLanguage = (lang) => {
+            const langData = translations[lang];
+            document.querySelectorAll('[data-lang-key]').forEach(el => {
+                const key = el.dataset.langKey;
+                if (langData[key]) {
+                    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT') {
+                        if(el.type !== 'checkbox' && el.placeholder) el.placeholder = langData[key];
+                    } else {
+                        el.innerHTML = langData[key];
+                    }
+                }
+            });
+            // Also update titles for move buttons
+            document.querySelectorAll('.move-block-up').forEach(btn => btn.title = langData.moveUp);
+            document.querySelectorAll('.move-block-down').forEach(btn => btn.title = langData.moveDown);
+
+            creditLine.innerHTML = langData.footerCredit;
+            footerText.innerHTML = langData.footerCredit;
+            document.documentElement.lang = lang;
+            
+            // Sync both language switchers
+            languageSwitcher.value = lang;
+            introLanguageSwitcher.value = lang;
+        };
+        
+        const createField = (type, labelKey, name, value = '', placeholderKey = '') => {
+            const lang = languageSwitcher.value;
+            const labelText = translations[lang][labelKey] || labelKey;
+            const placeholderText = placeholderKey ? translations[lang][placeholderKey] : '';
+            const valueAttr = value ? `value="${value}"` : '';
+
+            if (type === 'textarea') {
+                return `<div class="mb-2 field-wrapper"><label class="block text-sm font-bold mb-1" data-lang-key="${labelKey}">${labelText}</label><textarea name="${name}" class="w-full p-2 border border-accent rounded-md" rows="3" placeholder="${placeholderText}">${value}</textarea></div>`;
+            }
+            return `<div class="mb-2 field-wrapper"><label class="block text-sm font-bold mb-1" data-lang-key="${labelKey}">${labelText}</label><input type="${type}" name="${name}" ${valueAttr} placeholder="${placeholderText}" class="w-full p-2 border border-accent rounded-md"></div>`;
+        };
+
+        const getBlockHTML = (type) => {
+            const lang = languageSwitcher.value;
+            let content = '';
+            switch (type) {
+                case 'basicInfo':
+                    content = createField('input', 'lessonTitle', 'title') +
+                              createField('input', 'teacherName', 'teacher') +
+                              createField('input', 'subject', 'subject') +
+                              createField('input', 'gradeLevel', 'grade') +
+                              createField('date', 'date', 'date', '') + // Date is now blank by default
+                              createField('input', 'unitTopic', 'unit');
+                    break;
+                case 'activities':
+                    content = `<div class="activities-list space-y-4"></div><button class="add-activity-btn mt-4 bg-accent text-accent-content p-2 rounded text-sm no-print" data-lang-key="addActivity">${translations[lang].addActivity}</button>`;
+                    break;
+                // ... other cases remain the same
+                default:
+                     const defaultFields = {
+                        studentProfile: createField('textarea', 'studentProfileLabel', 'student-profile') + createField('textarea', 'classOrg', 'class-org'),
+                        objectives: createField('textarea', 'learningObjectives', 'learning-obj') + createField('textarea', 'knowledge', 'knowledge') + createField('textarea', 'skills', 'skills') + createField('textarea', 'attitudes', 'attitudes') + createField('textarea', 'keyConcepts', 'concepts'),
+                        materials: createField('textarea', 'physicalMaterials', 'phys-materials') + createField('textarea', 'digitalResources', 'digi-resources'),
+                        roles: createField('textarea', 'teacherRole', 'teacher-role') + createField('textarea', 'studentRole', 'student-role'),
+                        assessment: createField('textarea', 'formativeAssessment', 'form-assess') + createField('textarea', 'summativeAssessment', 'summ-assess') + createField('textarea', 'alternativeAssessment', 'alt-assess'),
+                        differentiation: createField('textarea', 'diffStrategies', 'diff-strat'),
+                        reflection: createField('textarea', 'teacherReflection', 'reflection') + createField('textarea', 'additionalNotes', 'add-notes'),
+                        communicationDescriptors: (() => {
+                            const levels = Object.keys(commsDescriptorsData);
+                            let options = levels.map(level => `<option value="${level}">${level.toUpperCase()}</option>`).join('');
+                            return `<div class="mb-2">
+                                         <label class="block text-sm font-bold mb-1" data-lang-key="cefrLevel">${translations[lang].cefrLevel}</label>
+                                         <select class="cefr-level-select w-full p-2 border border-accent rounded-md">
+                                           <option value="">--</option>
+                                           ${options}
+                                         </select>
+                                       </div>
+                                       <div class="descriptors-container mt-4"></div>`;
+                        })()
+                    };
+                    content = defaultFields[type] || '';
+            }
+            const title = translations[lang][type] || type;
+            return `<div class="plan-block bg-white rounded-lg shadow-md p-4" draggable="true" data-block-id="${blockCounter++}">
+                        <div class="flex justify-between items-center border-b border-primary pb-2 mb-3">
+                            <h3 class="text-lg font-bold text-primary" data-lang-key="${type}">${title}</h3>
+                            <div class="flex items-center space-x-3 no-print">
+                                <button class="move-block-up text-gray-500 hover:text-gray-800" title="${translations[lang].moveUp}">▲</button>
+                                <button class="move-block-down text-gray-500 hover:text-gray-800" title="${translations[lang].moveDown}">▼</button>
+                                <button class="remove-block-btn text-red-500 hover:text-red-700 font-bold" data-lang-key="removeBlock">${translations[lang].removeBlock}</button>
+                            </div>
+                        </div>
+                        ${content}
+                    </div>`;
+        };
+
+        const updateMoveButtons = () => {
+            const blocks = canvas.querySelectorAll('.plan-block');
+            blocks.forEach((block, index) => {
+                const upBtn = block.querySelector('.move-block-up');
+                const downBtn = block.querySelector('.move-block-down');
+                if (upBtn) upBtn.style.visibility = (index === 0) ? 'hidden' : 'visible';
+                if (downBtn) downBtn.style.visibility = (index === blocks.length - 1) ? 'hidden' : 'visible';
+            });
+        };
+
+        const addBlock = (type) => {
+            const placeholder = document.getElementById('canvas-placeholder');
+            if (placeholder) placeholder.remove();
+            const blockHTML = getBlockHTML(type);
+            canvas.insertAdjacentHTML('beforeend', blockHTML);
+            updateMoveButtons();
+        };
+        
+        const updateDescriptors = (selectElement) => {
+            const lang = languageSwitcher.value;
+            const level = selectElement.value;
+            const container = selectElement.closest('.plan-block').querySelector('.descriptors-container');
+            if (!level) {
+                container.innerHTML = '';
+                return;
+            }
+            
+            const data = commsDescriptorsData[level];
+            let html = '';
+            for (const skill in data) {
+                const skillTitleKey = {readingComp: 'readingComp', writingProd: 'writingProd', listeningComp: 'listeningComp', oralProd: 'oralProd', interaction: 'interaction', mediation: 'mediation'}[skill];
+                const skillTitle = translations[lang][skillTitleKey] || skill;
+                const skillContent = data[skill].map((desc) => `<div><label class="flex items-center"><input type="checkbox" class="mr-2 accent-primary"><span>${desc}</span></label></div>`).join('');
+
+                html += `<div class="skill-group"><h4 class="font-bold mt-3" data-lang-key="${skillTitleKey}">${skillTitle}</h4><div class="space-y-1 pl-2">${skillContent}</div></div>`;
+            }
+            container.innerHTML = html;
+        };
+
+        const createActivityStep = () => {
+            const lang = languageSwitcher.value;
+            const newActivity = document.createElement('div');
+            activityCounter++;
+            newActivity.className = 'activity-step border-t-2 border-dashed border-accent pt-4 mt-4';
+            
+            newActivity.innerHTML = `
+                <div class="flex justify-between items-center mb-2">
+                    <h4 class="font-bold text-primary" data-lang-key="activityStep">${translations[lang].activityStep} ${activityCounter}</h4>
+                    <button class="remove-activity text-red-500 text-2xl font-bold no-print" title="Remove Step">&times;</button>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    ${createField('input', 'activityTitle', `act-title-${activityCounter}`)}
+                    ${createField('input', 'duration', `act-duration-${activityCounter}`)}
+                </div>
+                ${createField('textarea', 'activityType', `act-type-${activityCounter}`)}
+                ${createField('textarea', 'classOrganization', `act-org-${activityCounter}`)}
+                ${createField('textarea', 'teacherRoleAndActions', `act-teacher-${activityCounter}`)}
+                ${createField('textarea', 'studentActions', `act-student-${activityCounter}`)}
+                ${createField('textarea', 'sourcesAndTools', `act-tools-${activityCounter}`)}
+                ${createField('textarea', 'activityOutcomes', `act-outcomes-${activityCounter}`)}
+            `;
+            newActivity.querySelector('.remove-activity').onclick = () => {
+                newActivity.remove();
+                // Renumber remaining activities
+                const activityList = document.querySelector('.activities-list');
+                if (activityList) {
+                    const remainingSteps = activityList.querySelectorAll('.activity-step');
+                    activityCounter = 0;
+                    remainingSteps.forEach(step => {
+                         activityCounter++;
+                         step.querySelector('h4').innerHTML = `${translations[lang].activityStep} ${activityCounter}`;
+                    });
+                }
+            };
+            return newActivity;
+        };
+
+
+        // --- EVENT LISTENERS ---
+
+        languageSwitcher.addEventListener('change', (e) => setLanguage(e.target.value));
+        introLanguageSwitcher.addEventListener('change', (e) => setLanguage(e.target.value));
+
+        enterAppBtn.addEventListener('click', () => {
+            introPage.classList.add('hidden');
+            appContainer.classList.remove('hidden');
+            appContainer.classList.add('flex');
+        });
+
+        blockAdders.forEach(button => {
+            button.addEventListener('click', () => addBlock(button.dataset.blockType));
+        });
+
+        canvas.addEventListener('click', (e) => {
+            if (e.target.classList.contains('remove-block-btn')) {
+                e.target.closest('.plan-block').remove();
+                if (canvas.children.length === 0 || (canvas.children.length === 1 && canvas.children[0].id === 'canvas-placeholder')) {
+                    canvas.innerHTML = `<div id="canvas-placeholder" class="text-center text-gray-400 py-20">
+                                            <h3 class="text-2xl" data-lang-key="canvasTitle">${translations[languageSwitcher.value].canvasTitle}</h3>
+                                            <p data-lang-key="canvasInstruction">${translations[languageSwitcher.value].canvasInstruction}</p>
+                                        </div>`;
+                }
+                updateMoveButtons();
+            }
+            
+            if (e.target.classList.contains('add-activity-btn')) {
+                const list = e.target.previousElementSibling;
+                list.appendChild(createActivityStep());
+            }
+
+            if (e.target.classList.contains('move-block-up')) {
+                const block = e.target.closest('.plan-block');
+                if (block && block.previousElementSibling) {
+                    block.parentElement.insertBefore(block, block.previousElementSibling);
+                    updateMoveButtons();
+                }
+            }
+
+            if (e.target.classList.contains('move-block-down')) {
+                const block = e.target.closest('.plan-block');
+                if (block && block.nextElementSibling) {
+                    block.parentElement.insertBefore(block.nextElementSibling, block);
+                    updateMoveButtons();
+                }
+            }
+        });
+        
+        canvas.addEventListener('change', (e) => {
+            if (e.target.classList.contains('cefr-level-select')) {
+                updateDescriptors(e.target);
+            }
+        });
+
+        newPlanBtn.addEventListener('click', () => {
+             if (confirm(languageSwitcher.value === 'en' ? 'Are you sure you want to start a new plan? All current content will be lost.' : 'Είστε σίγουροι ότι θέλετε να ξεκινήσετε ένα νέο σχέδιο; Όλο το περιεχόμενο θα χαθεί.')) {
+                canvas.innerHTML = `<div id="canvas-placeholder" class="text-center text-gray-400 py-20">
+                                        <h3 class="text-2xl" data-lang-key="canvasTitle">${translations[languageSwitcher.value].canvasTitle}</h3>
+                                        <p data-lang-key="canvasInstruction">${translations[languageSwitcher.value].canvasInstruction}</p>
+                                    </div>`;
+                activityCounter = 0; // Reset activity counter
+             }
+        });
+
+        printBtn.addEventListener('click', () => {
+            const printArea = document.getElementById('print-area');
+            const lang = languageSwitcher.value;
+            const replacedElements = [];
+
+            // --- Prepare for printing ---
+            
+            // 1. Replace inputs/textareas with static text & hide empty wrappers
+            printArea.querySelectorAll('.field-wrapper').forEach(wrapper => {
+                const input = wrapper.querySelector('input, textarea');
+                if (input && input.value.trim() !== '') {
+                    const printValue = document.createElement('div');
+                    printValue.className = 'print-value';
+                    printValue.textContent = input.value;
+                    wrapper.appendChild(printValue);
+                    input.classList.add('hide-on-print');
+                    replacedElements.push({ wrapper, input, replacement: printValue });
+                } else {
+                    wrapper.classList.add('hide-on-print');
+                    replacedElements.push({ wrapper, input: null, replacement: null });
+                }
+            });
+
+            // 2. Hide empty activity steps
+            printArea.querySelectorAll('.activity-step').forEach(step => {
+                const inputs = step.querySelectorAll('input, textarea');
+                const allEmpty = Array.from(inputs).every(i => i.value.trim() === '');
+                if (allEmpty) {
+                    step.classList.add('hide-on-print');
+                    replacedElements.push({ wrapper: step, input: null, replacement: null });
+                }
+            });
+
+            // 3. Hide unchecked communication descriptor skills
+            printArea.querySelectorAll('.skill-group').forEach(group => {
+                const checkboxes = group.querySelectorAll('input[type="checkbox"]:checked');
+                if (checkboxes.length === 0) {
+                    group.classList.add('hide-on-print');
+                    replacedElements.push({ wrapper: group, input: null, replacement: null });
+                }
+            });
+
+            // 4. Add Header and Footer
+            const printHeader = document.createElement('div');
+            printHeader.className = 'text-center mb-8';
+            const subjectInput = printArea.querySelector('input[name="subject"]');
+            const gradeInput = printArea.querySelector('input[name="grade"]');
+            const teacherInput = printArea.querySelector('input[name="teacher"]');
+            let title = `<h1 class="text-2xl font-bold">${translations[lang].appTitle}</h1>`;
+            let subtitle = '';
+            if (subjectInput && gradeInput && teacherInput) {
+                const subjectVal = subjectInput.value || '';
+                const gradeVal = gradeInput.value || '';
+                const teacherVal = teacherInput.value || '';
+                if(subjectVal || gradeVal || teacherVal) {
+                    title = `<h1 class="text-2xl font-bold">${translations[lang].lessonPlanFor} ${subjectVal} ${gradeVal}</h1>`;
+                    subtitle = `<h2 class="text-xl mt-1">${teacherVal}</h2>`;
+                }
+            }
+            printHeader.innerHTML = title + subtitle;
+            printArea.prepend(printHeader);
+
+            const printFooter = document.createElement('div');
+            printFooter.className = 'footer-credit-print pt-8';
+            printFooter.innerHTML = creditLine.innerHTML;
+            printArea.appendChild(printFooter);
+            
+            // --- Print ---
+            window.print();
+            
+            // --- Cleanup after printing ---
+            printHeader.remove();
+            printFooter.remove();
+            replacedElements.forEach(item => {
+                item.wrapper.classList.remove('hide-on-print');
+                if (item.input) item.input.classList.remove('hide-on-print');
+                if (item.replacement) item.replacement.remove();
+            });
+        });
+        
+        // Drag and Drop Logic
+        let draggedItem = null;
+        canvas.addEventListener('dragstart', (e) => {
+            if (e.target.classList.contains('plan-block')) {
+                draggedItem = e.target;
+                setTimeout(() => { e.target.classList.add('dragging'); }, 0);
+            }
+        });
+        canvas.addEventListener('dragend', (e) => {
+            if(draggedItem) {
+                draggedItem.classList.remove('dragging');
+                draggedItem = null;
+                updateMoveButtons(); // Update buttons after drag
+            }
+        });
+        canvas.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            const afterElement = getDragAfterElement(canvas, e.clientY);
+            const draggable = document.querySelector('.dragging');
+            if (draggable) {
+                 if (afterElement == null) {
+                    canvas.appendChild(draggable);
+                } else {
+                    canvas.insertBefore(draggable, afterElement);
+                }
+            }
+        });
+        function getDragAfterElement(container, y) {
+            const draggableElements = [...container.querySelectorAll('.plan-block:not(.dragging)')];
+            return draggableElements.reduce((closest, child) => {
+                const box = child.getBoundingClientRect();
+                const offset = y - box.top - box.height / 2;
+                if (offset < 0 && offset > closest.offset) {
+                    return { offset: offset, element: child };
+                } else {
+                    return closest;
+                }
+            }, { offset: Number.NEGATIVE_INFINITY }).element;
+        }
+
+        // --- INITIALIZATION ---
+        setLanguage('el'); // Default language
+        updateMoveButtons();
+    });
+    </script>
+</body>
+</html>
